@@ -305,16 +305,23 @@ function rememberHighlight(abbrev) {
   writeRemembered(abbrev);
 }
 
+// The abbreviation a team is keyed by. The fetch script defaults team_abbrev to
+// the empty string (src/fetch_data.py) and this feature already spends "" as its
+// "no highlight" token, so an unfallen-back key would name None and light a team
+// nobody chose. Falling back to the name is what the fetch script's own position
+// bucketing and renderTable already do.
+const teamKey = t => t.team_abbrev || t.team_name;
+
 function setupHighlight(chart, teams) {
   // Datasets and Standings rows are both built from the delivered team order,
   // so one index addresses a team's line and its row alike.
-  const abbrevs = teams.map(t => t.team_abbrev);
+  const abbrevs = teams.map(teamKey);
   const select = document.getElementById("highlight-team");
   const rows = document.querySelectorAll("#standings-table tbody tr");
 
   teams.forEach(t => {
     const option = document.createElement("option");
-    option.value = t.team_abbrev;
+    option.value = teamKey(t);
     option.textContent = t.team_name;
     select.appendChild(option);
   });
@@ -325,6 +332,8 @@ function setupHighlight(chart, teams) {
    * or the URL and writing it back would only echo.
    */
   function apply(abbrev, persist) {
+    // teamKey guarantees no team is keyed by "", so the empty selection finds
+    // nothing and lands on NONE by itself.
     const lit = abbrevs.indexOf(abbrev);
     select.value = abbrev;
     chart.data.datasets.forEach((ds, i) => styleDataset(ds, i, lit));

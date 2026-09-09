@@ -155,13 +155,41 @@ test.describe("Remembered and shareable selection", () => {
   });
 
   test("ignores unknown teams in the link and in storage, and writes nothing", async ({ page }) => {
+    const data = await useFixture(page);
     await page.goto("/index.html");
     await page.evaluate(k => localStorage.setItem(k, "GONE"), STORAGE_KEY);
 
     await page.goto("/index.html?team=NOPE");
+    // Prove the control was actually built: an empty-state page would satisfy
+    // every assertion below without the highlight code ever running.
+    await expect(options(page)).toHaveCount(data.teams.length + 1);
     await expect(page.locator(SELECT)).toHaveValue("");
     await expect(page.locator("#standings-table tbody tr.highlight")).toHaveCount(0);
     expect(await stored(page)).toBe("GONE");
+  });
+
+  test("an empty abbreviation cannot pass itself off as None", async ({ page }) => {
+    // The fetch script defaults team_abbrev to "", which is also this feature's
+    // "nothing highlighted" token — so an unkeyed team must not answer to it.
+    const EMPTIED = 4;
+    const data = await useFixture(page, d => {
+      d.teams[EMPTIED].team_abbrev = "";
+      return d;
+    });
+    await page.goto("/index.html");
+
+    // A plain first load highlights nothing at all.
+    await expect(page.locator(SELECT)).toHaveValue("");
+    await expect(page.locator("#standings-table tbody tr.highlight")).toHaveCount(0);
+
+    // And that team is still selectable on its own terms, then clearable.
+    const fallback = data.teams[EMPTIED].team_name;
+    expect(await options(page).evaluateAll(os => os.map(o => o.value)))
+      .toEqual(["", ...data.teams.map(t => t.team_abbrev || t.team_name)]);
+    await page.selectOption(SELECT, fallback);
+    await expect(rows(page).nth(EMPTIED)).toHaveClass(/highlight/);
+    await page.selectOption(SELECT, "");
+    await expect(page.locator("#standings-table tbody tr.highlight")).toHaveCount(0);
   });
 
   test("still renders, and still takes a link, where site data is blocked", async ({ page }) => {
