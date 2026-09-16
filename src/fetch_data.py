@@ -41,8 +41,15 @@ PLAYOFF_CUTOFF = int(os.environ.get("FF_PLAYOFF_CUTOFF", "6"))  # zero-line rank
 ESPN_S2 = os.environ.get("ESPN_S2")
 SWID = os.environ.get("SWID")
 
-DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "docs", "data")
-OUTPUT_PATH = os.path.join(DATA_DIR, "league_data.json")
+# Where the site's data is published. FF_OUTPUT_PATH names the standings file,
+# which is how a scheduled job points a standalone copy of this script at
+# whichever checkout actually serves the site. The week files are published
+# beside the standings, so the override carries the whole set rather than
+# stranding week_<N>.json in this checkout.
+OUTPUT_PATH = os.environ.get("FF_OUTPUT_PATH") or os.path.join(
+    os.path.dirname(__file__), "..", "docs", "data", "league_data.json")
+# "" when the override is a bare filename, which makedirs cannot take.
+DATA_DIR = os.path.dirname(OUTPUT_PATH) or "."
 
 
 def week_path(week):
