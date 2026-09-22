@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Team — Fantasy Football (PROTOTYPE)</title>
+<link rel="stylesheet" href="css/styles.css">
+<!--
+  PROTOTYPE — ticket 05 (Team page layout). Throwaway; lives on the
+  prototype/team-page branch only and never ships.
+
+  Three variants of the Team page on this one route, switchable via
+  ?variant=A|B|C and the floating bar at the bottom. Reads the real committed
+  2026 data (league_data.json plus the current week file) and STUBS the
+  teams[].analytics block that ticket 06 defined but the fetcher does not yet
+  write. ?weeks=N synthesizes weeks 2..N so the layout can be judged
+  mid-season; ?weeks=1 is the real data alone.
+-->
+<style>
+/* ── prototype-only styles; production would fold these into styles.css ── */
+.proto-banner{background:#3b2a12; color:#ffe9a8; font-size:12px; font-weight:700;
+  letter-spacing:.06em; text-transform:uppercase; text-align:center; padding:5px 10px}
+.team-card{margin:20px 24px 0; padding:18px 20px; display:flex; gap:18px; align-items:center;
+  background:var(--paper); border:1px solid var(--line); border-radius:14px; flex-wrap:wrap}
+.team-card-logo{width:72px; height:72px; border-radius:12px; object-fit:contain; flex:none;
+  background:var(--cream); border:1px solid var(--line)}
+.team-card-id{flex:1; min-width:220px}
+.team-card-name{display:block; font-size:24px; font-weight:800; letter-spacing:-.01em; line-height:1.15}
+.team-card-mgr{display:block; color:var(--mut); font-size:14px; margin-top:2px}
+.team-card-record{display:inline-block; margin-top:6px; font-size:12px; color:var(--mut);
+  background:var(--cream); border:1px solid var(--line); border-radius:999px; padding:1px 9px;
+  font-variant-numeric:tabular-nums}
+.team-card-stats{display:flex; gap:22px; flex-wrap:wrap}
+.stat{min-width:78px}
+.stat-label{display:block; font-size:11px; font-weight:700; text-transform:uppercase;
+  letter-spacing:.05em; color:var(--field-dk)}
+.stat-value{display:block; font-size:26px; font-weight:800; line-height:1.1;
+  font-variant-numeric:tabular-nums}
+.stat-value.pos{color:var(--pos)} .stat-value.neg{color:var(--neg)}
+.stat-sub{display:block; font-size:12px; color:var(--mut)}
+
+/* analytics tiles */
+.tiles{display:grid; gap:12px; margin:0 24px; grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}
+.tile{background:var(--paper); border:1px solid var(--line); border-radius:12px; padding:12px 14px}
+.tile .stat-value{font-size:22px}
+.tile-foot{font-size:12px; color:var(--mut); margin-top:6px; line-height:1.35}
+.tile.muted{opacity:.55}
+.footnote{margin:8px 24px 0; font-size:12px; color:var(--mut)}
+.footnote-page{margin:28px 24px 0; padding-top:12px; border-top:1px solid var(--line);
+  font-size:12px; color:var(--mut)}
+sup.fn{color:var(--field); font-weight:700; cursor:help}
+
+/* week table */
+#week-table td.rk{color:var(--mut)}
+#week-table td.opp a{color:var(--ink); font-weight:600; text-decoration:none}
+#week-table td.opp a:hover{text-decoration:underline}
+#week-table tr.row-link{cursor:pointer}
+#week-table tr.row-link:hover td{background:var(--field-lt)}
+.res{display:inline-block; width:20px; height:20px; line-height:20px; border-radius:50%;
+  font-size:11px; font-weight:800; text-align:center; color:#fff}
+.res.W{background:var(--field)} .res.L{background:var(--neg)} .res.T{background:var(--mut)}
+.luck-tag{display:inline-block; font-size:10px; font-weight:700; text-transform:uppercase;
+  letter-spacing:.04em; border-radius:999px; padding:1px 7px; margin-left:6px}
+.luck-tag.lucky-win{background:#fff1c9; color:#8a6a10}
+.luck-tag.unlucky-loss{background:#f6dcd6; color:#8a2a1a}
+td.pos{color:var(--pos)} td.neg{color:var(--neg)}
+tr.opp-group td{background:var(--field-lt); font-weight:700; color:var(--field-dk);
+  text-align:left; font-size:12px; text-transform:uppercase; letter-spacing:.05em}
+.section-head{display:flex; align-items:center; justify-content:space-between; margin:28px 24px 12px}
+.section-head h2{margin:0}
+.section-head .pivot-toggle{font-size:12px}
+
+/* head-to-head block */
+.h2h{display:grid; gap:10px; margin:0 24px; grid-template-columns:repeat(auto-fill,minmax(200px,1fr))}
+.h2h-card{display:flex; align-items:center; gap:10px; padding:10px 12px; background:var(--paper);
+  border:1px solid var(--line); border-radius:10px; text-decoration:none; color:inherit}
+.h2h-card:hover{border-color:var(--field)}
+.h2h-logo{width:28px; height:28px; border-radius:6px; object-fit:contain; flex:none}
+.h2h-name{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:600; font-size:13px}
+.h2h-rec{flex:none; font-weight:800; font-variant-numeric:tabular-nums}
+.h2h-rec.up{color:var(--pos)} .h2h-rec.down{color:var(--neg)}
+.h2h-weeks{flex:none; font-size:11px; color:var(--mut)}
+
+/* roster */
+#roster-table td.slot{color:var(--mut); font-weight:700; font-size:12px; width:60px; text-align:left}
+#roster-table td.player{text-align:left; font-weight:600}
+#roster-table td.meta{color:var(--mut); font-size:12px; text-align:left}
+#roster-table tr.group td{background:var(--field-lt); font-weight:700; color:var(--field-dk);
+  text-align:left; font-size:12px; text-transform:uppercase; letter-spacing:.05em}
+#roster-table tr.bench td.player{font-weight:500}
+#roster-table tr.ir td{color:var(--mut)}
+.shot{width:26px; height:26px; border-radius:50%; object-fit:cover; vertical-align:middle;
+  margin-right:8px; background:var(--cream)}
+.injury-tag{font-size:10px; font-weight:800; color:var(--neg); margin-left:4px}
+
+/* position breakdown */
+#pos-table td.bar{width:36%; text-align:left}
+.bar-wrap{position:relative; height:10px; background:var(--cream); border:1px solid var(--line); border-radius:5px}
+.bar-fill{position:absolute; left:0; top:0; bottom:0; background:var(--field); border-radius:5px}
+.bar-avg{position:absolute; top:-3px; bottom:-3px; width:2px; background:var(--gold)}
+
+/* two-column layout (variant C) */
+.two-col{display:grid; gap:0 20px; grid-template-columns:1fr 1fr; align-items:start}
+@media (max-width:760px){.two-col{grid-template-columns:1fr}}
+.two-col > section{min-width:0}
+.two-col .table-wrap{overflow-x:auto}
+.two-col .table-wrap, .two-col .tiles, .two-col .h2h, .two-col .chart-wrap{margin-left:0; margin-right:0}
+.two-col h2, .two-col .section-head, .two-col .footnote{margin-left:0; margin-right:0}
+.two-col{margin:0 24px}
+
+/* empty state: picker / index */
+.picker{display:grid; gap:10px; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); margin:14px 0 0}
+.pick{display:flex; align-items:center; gap:10px; padding:10px 12px; background:var(--cream);
+  border:1px solid var(--line); border-radius:10px; text-decoration:none; color:inherit; text-align:left}
+.pick:hover{border-color:var(--field); background:var(--field-lt)}
+.pick-logo{width:30px; height:30px; border-radius:6px; object-fit:contain; flex:none}
+.pick-name{display:block; font-weight:700; font-size:13px; line-height:1.2}
+.pick-mgr{display:block; font-size:11px; color:var(--mut)}
+.index-cards{display:grid; gap:12px; margin:20px 24px 0; grid-template-columns:repeat(auto-fill,minmax(280px,1fr))}
+.index-card{display:flex; align-items:center; gap:12px; padding:12px 14px; background:var(--paper);
+  border:1px solid var(--line); border-radius:12px; text-decoration:none; color:inherit}
+.index-card:hover{border-color:var(--field)}
+.index-card.highlight{background:var(--field-hl)}
+.index-rank{flex:none; width:26px; font-weight:800; color:var(--mut); text-align:center}
+.index-logo{width:40px; height:40px; border-radius:8px; object-fit:contain; flex:none}
+.index-id{flex:1; min-width:0}
+.index-name{display:block; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.index-mgr{display:block; font-size:12px; color:var(--mut)}
+.index-norm{flex:none; font-weight:800; font-variant-numeric:tabular-nums}
+.index-norm.pos{color:var(--pos)} .index-norm.neg{color:var(--neg)}
+.index-card.cutoff{border-bottom:2px dashed var(--gold)}
+
+/* the floating prototype switcher — deliberately not part of the design */
+#proto-bar{position:fixed; left:50%; bottom:14px; transform:translateX(-50%); z-index:50;
+  display:flex; align-items:center; gap:10px; padding:8px 12px; background:#111; color:#fff;
+  border-radius:999px; box-shadow:0 6px 24px rgba(0,0,0,.35); font:13px/1.2 -apple-system,system-ui,sans-serif}
+#proto-bar button{background:#333; color:#fff; border:none; border-radius:999px; width:28px; height:28px; cursor:pointer; font-size:14px}
+#proto-bar button:hover{background:#555}
+#proto-bar .lbl{font-weight:700; min-width:190px; text-align:center}
+#proto-bar select{background:#222; color:#fff; border:1px solid #444; border-radius:6px; padding:3px 6px; font-size:12px}
+#proto-bar .sep{width:1px; height:20px; background:#444}
+</style>
+</head>
+<body>
+<div class="proto-banner">Prototype · ticket 05 · nothing here ships · analytics numbers past week 1 are stubbed</div>
+<header>
+  <h1><span class="ball">🏈</span><span id="page-title">Team</span></h1>
+  <p class="sub" id="subtitle"></p>
+  <nav class="header-nav" id="nav">
+    <a href="index.html" class="nav-link">Standings</a>
+    <a href="scoreboard.html" class="nav-link">Scoreboard</a>
+    <a href="position.html" class="nav-link">Position &amp; Score Analysis</a>
+    <a href="team.html" class="nav-link active" id="nav-team">My Team</a>
+  </nav>
+</header>
+
+<main id="main"></main>
+
+<footer><span id="updated"></span></footer>
+
+<div id="proto-bar">
+  <button id="proto-prev" title="Previous variant (←)">‹</button>
+  <span class="lbl" id="proto-label"></span>
+  <button id="proto-next" title="Next variant (→)">›</button>
+  <span class="sep"></span>
+  <label>weeks <select id="proto-weeks">
+    <option value="1">1 (real)</option><option value="3">3</option><option value="6">6</option><option value="10">10</option><option value="14">14</option>
+  </select></label>
+  <label>team <select id="proto-team"><option value="">(none)</option></select></label>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="js/highlight.js"></script>
+<script src="js/team-prototype.js"></script>
+</body>
+</html>
